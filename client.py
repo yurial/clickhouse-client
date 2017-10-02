@@ -49,7 +49,6 @@ class ClickHouseClient:
     def _fetch(self, url, query, on_progress):
         from pycurl import Curl, POST, POSTFIELDS
         from io import BytesIO
-        from json import loads
         c = Curl()
         c.setopt(c.URL, url)
         c.setopt(POST, 1)
@@ -60,24 +59,38 @@ class ClickHouseClient:
         c.setopt(c.WRITEDATA, buffer)
         c.perform()
         c.close()
-        return loads( buffer.getvalue().decode('UTF-8') )
+        return buffer
+
 
     def _build_url(self, opts):
         options = deepcopy(self.options)    #get copy of self.options
         options.update(opts)                #and override with opts
         options = dict([(key,val) for key, val in options.iteritems() if val is not None]) #remove keys with None values
         urlquery = '&'.join(['{}={}'.format(key,val) for key,val in options.iteritems()])
-        url = '{scheme}://{netloc}/?{urlquery}'.format(scheme=self.scheme,netloc=self.netloc,urlquery=urlquery)
+        url = '{self.scheme}://{self.netloc}/?{urlquery}'.format(self=self,urlquery=urlquery)
         return url
+
 
     def select(self, query, on_progress = None, **opts):
         import re
+        from json import loads
+        from errors import Error
         if re.search('[)\s]FORMAT\s', query, re.IGNORECASE):
-            raise ProgrammingError('Formatting is not available')
+            raise Exception('Formatting is not available')
         query += ' FORMAT JSONCompact'
         if on_progress is None:
             on_progress = self.on_progress
         url = self._build_url(opts)
-        return self._fetch(url, query, on_progress)
-
+        data = self._fetch(url, query, on_progress)
+        strdata = data.getvalue().decode('UTF-8')
+        try:
+            return loads(strdata)
+        except Exception as e:
+            errre = re.compile('Code: (\d+), e.displayText\(\) = DB::Exception: (.+?), e.what\(\) = (.+)')
+            m = errre.search(strdata)
+            if m:
+                raise Error(*m.groups())
+            else:
+                print(e, strdata)
+                raise
 

@@ -2,27 +2,21 @@ import sys
 
 # In Python 3 StandardError --> Exception.
 if sys.version_info < (3, 0):
-    class Error(StandardError):
-        pass
+    BaseClass = StandardError
 else:
-    class Error(Exception):
-        pass
+    BaseClass = Exception
+
+class Error(BaseClass):
+    def __init__(self, code, msg, what):
+        BaseClass.__init__(self, msg)
+        self.code = code
+        self.what = what
 
 
-class DatabaseError(Error):
-    pass
+    def __str__(self):
+        return 'code: {self.code}, message: {self.message}'.format(self=self)
 
 
-class InternalError(DatabaseError):
-    pass
+    def __repr__(self):
+        return self.__str__()
 
-
-class ProgrammingError(DatabaseError):
-    pass
-
-
-class OperationalError(DatabaseError):
-
-    @classmethod
-    def from_response(cls, response):
-        return cls('{r.status_code}: {r.reason}; {r.content}'.format(r=response))
