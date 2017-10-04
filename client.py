@@ -75,6 +75,7 @@ class ClickHouseClient:
         import re
         from json import loads
         from errors import Error
+        from result import Result
         if re.search('[)\s]FORMAT\s', query, re.IGNORECASE):
             raise Exception('Formatting is not available')
         query += ' FORMAT JSONCompact'
@@ -84,7 +85,7 @@ class ClickHouseClient:
         data = self._fetch(url, query, on_progress)
         strdata = data.getvalue().decode('UTF-8')
         try:
-            return loads(strdata)
+            return Result(**loads(strdata))
         except Exception as e:
             errre = re.compile('Code: (\d+), e.displayText\(\) = DB::Exception: (.+?), e.what\(\) = (.+)')
             m = errre.search(strdata)
