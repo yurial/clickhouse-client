@@ -14,11 +14,12 @@ class ClickHouseClient:
     on_progress = None
 
 
-    def __init__(self, url, on_progress=None):
+    def __init__(self, url, on_progress=None, **options):
         url = urlparse(url)
         self.scheme = url.scheme
         self.netloc = url.netloc
         self.options = dict([(key,str(val[0])) for key, val in parse_qs(url.query).iteritems()])
+        self.options.update(options)
         self.on_progress = on_progress
 
 
