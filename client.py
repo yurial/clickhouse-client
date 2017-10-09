@@ -87,7 +87,7 @@ class ClickHouseClient:
         strdata = data.getvalue().decode('UTF-8')
         try:
             return Result(**loads(strdata))
-        except Exception as e:
+        except BaseException as e:
             errre = re.compile('Code: (\d+), e.displayText\(\) = DB::Exception: (.+?), e.what\(\) = (.+)')
             m = errre.search(strdata)
             if m:
