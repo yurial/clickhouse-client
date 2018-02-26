@@ -14,7 +14,7 @@ class ClickHouseClient:
     on_progress = None
 
 
-    def __init__(self, url, on_progress=None, **options):
+    def __init__(self, url=None, on_progress=None, **options):
         url = urlparse(url)
         self.scheme = url.scheme
         self.netloc = url.netloc
