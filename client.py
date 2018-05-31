@@ -96,3 +96,12 @@ class ClickHouseClient:
                 print(e, strdata)
                 raise
 
+    def execute(self, query, **kwargs):
+        url = self._build_url(kwargs)
+        try:
+            data = self._fetch(url, query)
+            return data.getvalue()
+        except BaseException as e:
+            print(e)
+            raise
+
