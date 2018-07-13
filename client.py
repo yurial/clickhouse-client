@@ -1,3 +1,4 @@
+import logging
 from sys import version_info
 if version_info < (3, 0):
     from urlparse import urlparse, parse_qs
@@ -5,6 +6,17 @@ else:
     from urllib.parse import urlparse, parse_qs
 
 from copy import deepcopy
+
+def raise_exception(data):
+    import re
+    from errors import Error
+    errre = re.compile('Code: (\d+), e.displayText\(\) = DB::Exception: (.+?), e.what\(\) = (.+)')
+    m = errre.search(data)
+    if m:
+        raise Error(*m.groups())
+    else:
+        raise Exception('unexpected answer: {}'.format(data))
+
 
 class ClickHouseClient:
     scheme = None
@@ -47,7 +59,8 @@ class ClickHouseClient:
         return wrapper
 
 
-    def _fetch(self, url, query, on_progress):
+    def _fetch(self, url, query, on_progress=None):
+        logging.debug('query={query}'.format(query=query))
         from pycurl import Curl, POST, POSTFIELDS
         from io import BytesIO
         c = Curl()
@@ -60,7 +73,7 @@ class ClickHouseClient:
         c.setopt(c.WRITEDATA, buffer)
         c.perform()
         c.close()
-        return buffer
+        return buffer.getvalue().decode('UTF-8')
 
 
     def _build_url(self, opts):
@@ -75,7 +88,6 @@ class ClickHouseClient:
     def select(self, query, on_progress = None, **opts):
         import re
         from json import loads
-        from errors import Error
         from result import Result
         if re.search('[)\s]FORMAT\s', query, re.IGNORECASE):
             raise Exception('Formatting is not available')
@@ -84,24 +96,15 @@ class ClickHouseClient:
             on_progress = self.on_progress
         url = self._build_url(opts)
         data = self._fetch(url, query, on_progress)
-        strdata = data.getvalue().decode('UTF-8')
         try:
-            return Result(**loads(strdata))
-        except BaseException as e:
-            errre = re.compile('Code: (\d+), e.displayText\(\) = DB::Exception: (.+?), e.what\(\) = (.+)')
-            m = errre.search(strdata)
-            if m:
-                raise Error(*m.groups())
-            else:
-                print(e, strdata)
-                raise
+            return Result(**loads(data))
+        except BaseException:
+            raise_exception(data)
 
     def execute(self, query, **kwargs):
         url = self._build_url(kwargs)
-        try:
-            data = self._fetch(url, query, False)
-            return data.getvalue()
-        except BaseException as e:
-            print(e)
-            raise
+        data = self._fetch(url, query)
+        if data != '':
+            raise_exception(data)
+        return data
 
