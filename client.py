@@ -1,11 +1,11 @@
-import logging
 from sys import version_info
 if version_info < (3, 0):
     from urlparse import urlparse, parse_qs
 else:
     from urllib.parse import urlparse, parse_qs
 
-from copy import deepcopy
+from logging import getLogger
+logging = getLogger('clickhouse.client')
 
 def raise_exception(data):
     import re
@@ -19,12 +19,6 @@ def raise_exception(data):
 
 
 class ClickHouseClient:
-    scheme = None
-    netloc = None
-    options = None
-
-    on_progress = None
-
 
     def __init__(self, url=None, on_progress=None, **options):
         url = urlparse(url)
@@ -41,19 +35,21 @@ class ClickHouseClient:
 
     def _on_header_x_clickhouse_progress(self, on_progress, key, val):
         from json import loads
-        obj = loads( val )
+        obj = loads(val)
         total = int(obj['total_rows'])
         read = int(obj['read_rows'])
-        progress=float(read)/float(total)
+        progress = float(read)/float(total)
         on_progress(total=total, read=read, progress=progress)
 
 
     def _on_header(self, on_progress):
         def wrapper(header):
             try:
-                key, val = header.split(':', 1)
+                key, value = header.split(':', 1)
+                value = value.strip()
+                logging.debug('header={header} value={value}'.format(header=key, value=value))
                 if key == 'X-ClickHouse-Progress':
-                    self._on_header_x_clickhouse_progress(on_progress, key, val)
+                    self._on_header_x_clickhouse_progress(on_progress, key, value)
             except Exception as e:
                 return
         return wrapper
@@ -77,33 +73,34 @@ class ClickHouseClient:
 
 
     def _build_url(self, opts):
+        from copy import deepcopy
         options = deepcopy(self.options)    #get copy of self.options
         options.update(opts)                #and override with opts
         options = dict([(key,val) for key, val in options.iteritems() if val is not None]) #remove keys with None values
         urlquery = '&'.join(['{}={}'.format(key,val) for key,val in options.iteritems()])
         url = '{self.scheme}://{self.netloc}/?{urlquery}'.format(self=self,urlquery=urlquery)
+        logging.debug('url={url}'.format(url=url))
         return url
 
 
-    def select(self, query, on_progress = None, **opts):
+    def select(self, query, on_progress=None, **opts):
         import re
         from json import loads
         from result import Result
         if re.search('[)\s]FORMAT\s', query, re.IGNORECASE):
             raise Exception('Formatting is not available')
         query += ' FORMAT JSONCompact'
-        if on_progress is None:
-            on_progress = self.on_progress
         url = self._build_url(opts)
-        data = self._fetch(url, query, on_progress)
+        data = self._fetch(url, query, on_progress or self.on_progress)
         try:
             return Result(**loads(data))
         except BaseException:
             raise_exception(data)
 
+
     def execute(self, query, **kwargs):
         url = self._build_url(kwargs)
-        data = self._fetch(url, query)
+        data = self._fetch(url, query, on_progress=None)
         if data != '':
             raise_exception(data)
         return data
